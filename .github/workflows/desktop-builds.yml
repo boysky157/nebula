@@ -28,7 +28,7 @@ jobs:
             os: windows-2022
             arch: win64_msvc2022_64
           - name: macos
-            os: macos-14
+            os: macos-latest
             arch: ""
     steps:
       - name: Keep line endings unchanged
