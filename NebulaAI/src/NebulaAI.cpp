@@ -21,6 +21,14 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
+static QString cfg(const char* env, const char* key, const QString& def = QString())
+{
+	const QString e = qEnvironmentVariable(env);
+	if (!e.isEmpty()) return e;
+	const QString v = QSettings("Nebula", "NebulaAI").value(key).toString();
+	return v.isEmpty() ? def : v;
+}
+
 // ---------------------------------------------------------------- plugin glue
 StelModule* NebulaAIStelPluginInterface::getStelModule() const
 {
@@ -36,6 +44,7 @@ StelPluginInfo NebulaAIStelPluginInterface::getPluginInfo() const
 	info.contact = "-";
 	info.description = "AI assistant: ask the sky, guided tours, object explanations, photo identification.";
 	info.version = "0.1.0";
+	info.license = "GNU GPLv2 or later";
 	return info;
 }
 
@@ -59,6 +68,36 @@ NebulaChatWindow::NebulaChatWindow(NebulaAI* m)
 	row->addWidget(send);
 	row->addWidget(tour);
 	row->addWidget(photo);
+	auto* cfgBtn = new QPushButton("Settings");
+	row->addWidget(cfgBtn);
+	connect(cfgBtn, &QPushButton::clicked, this, [this]() {
+		QSettings st("Nebula", "NebulaAI");
+		QDialog d(this);
+		d.setWindowTitle("Nebula settings");
+		auto* f = new QFormLayout(&d);
+		auto* style = new QComboBox;
+		style->addItems({"openai", "anthropic"});
+		style->setCurrentText(st.value("style", "openai").toString());
+		auto* url = new QLineEdit(st.value("url").toString());
+		auto* key = new QLineEdit(st.value("key").toString());
+		key->setEchoMode(QLineEdit::Password);
+		auto* model = new QLineEdit(st.value("model").toString());
+		f->addRow("API style", style);
+		f->addRow("URL", url);
+		f->addRow("API key", key);
+		f->addRow("Model", model);
+		auto* bb = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
+		f->addRow(bb);
+		connect(bb, &QDialogButtonBox::accepted, &d, &QDialog::accept);
+		connect(bb, &QDialogButtonBox::rejected, &d, &QDialog::reject);
+		if (d.exec() == QDialog::Accepted) {
+			st.setValue("style", style->currentText());
+			st.setValue("url", url->text().trimmed());
+			st.setValue("key", key->text().trimmed());
+			st.setValue("model", model->text().trimmed());
+			append("Nebula", "Settings saved.");
+		}
+	});
 	lay->addLayout(row);
 
 	auto submit = [this, m]() {
@@ -134,14 +173,14 @@ QString NebulaAI::context() const
 void NebulaAI::post(const QJsonArray& messages, const QString& system,
                     std::function<void(const QString&)> done)
 {
-	const bool oa = qEnvironmentVariable("NEBULA_API_STYLE") == "openai";
-	const QByteArray key = qgetenv(oa ? "NEBULA_API_KEY" : "ANTHROPIC_API_KEY");
+	const bool oa = cfg("NEBULA_API_STYLE", "style") == "openai";
+	const QByteArray key = cfg(oa ? "NEBULA_API_KEY" : "ANTHROPIC_API_KEY", "key").toUtf8();
 	if (key.isEmpty()) {
 		done(oa ? "No key found. Run: export NEBULA_API_KEY=... then restart Nebula from that terminal."
 		        : "No API key found. Run: export ANTHROPIC_API_KEY=... then restart Nebula from that terminal.");
 		return;
 	}
-	const QString url = qEnvironmentVariable("NEBULA_API_URL",
+	const QString url = cfg("NEBULA_API_URL", "url",
 	    oa ? QString() : QString("https://api.anthropic.com/v1/messages"));
 	if (url.isEmpty()) {
 		done("Set NEBULA_API_URL to your gateway's chat completions URL.");
@@ -149,7 +188,7 @@ void NebulaAI::post(const QJsonArray& messages, const QString& system,
 	}
 	QNetworkRequest req{QUrl(url)};
 	req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-	const QString model = qEnvironmentVariable("NEBULA_MODEL", "claude-sonnet-4-6");
+	const QString model = cfg("NEBULA_MODEL", "model", "claude-sonnet-4-6");
 	QJsonObject body;
 	if (oa) {
 		req.setRawHeader("Authorization", "Bearer " + key);

@@ -1,0 +1,83 @@
+name: Linux AppImage
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  # Stellarium commit that nebula-core.patch was made against
+  STELLARIUM_COMMIT: 9dac07a412b1b8ce374c9218122fa5a85bbcbcf8
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Nebula
+        uses: actions/checkout@v4
+        with:
+          path: nebula
+
+      - name: Checkout Stellarium
+        uses: actions/checkout@v4
+        with:
+          repository: Stellarium/stellarium
+          ref: ${{ env.STELLARIUM_COMMIT }}
+          path: stellarium
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build git wget \
+            qt6-base-dev qt6-base-private-dev qt6-multimedia-dev qt6-positioning-dev \
+            qt6-serialport-dev qt6-websockets-dev qt6-charts-dev qt6-declarative-dev \
+            qt6-speech-dev qt6-webengine-dev qt6-svg-dev qt6-tools-dev \
+            qt6-tools-dev-tools qt6-l10n-tools libgl1-mesa-dev zlib1g-dev \
+            libexiv2-dev libvulkan-dev libxkbcommon-dev
+
+      - name: Add the Nebula plugin to Stellarium
+        working-directory: stellarium
+        run: |
+          git apply ../nebula/nebula-core.patch
+          cp -r ../nebula/NebulaAI plugins/
+
+      - name: Build
+        working-directory: stellarium
+        run: |
+          cmake -S . -B build -GNinja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+          cmake --build build
+
+      - name: Package AppImage
+        working-directory: stellarium
+        run: |
+          DESTDIR="$PWD/AppDir" cmake --install build
+          mkdir tools
+          wget -q -P tools https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q -P tools https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x tools/*.AppImage
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          export QMAKE=/usr/lib/qt6/bin/qmake6
+          export PATH="$PWD/tools:$PATH"
+          DESKTOP=$(ls AppDir/usr/share/applications/*.desktop | head -1)
+          ICON=$(find AppDir/usr/share/icons -name '*.png' | sort | tail -1)
+          tools/linuxdeploy-x86_64.AppImage --appdir AppDir --plugin qt \
+            --desktop-file "$DESKTOP" --icon-file "$ICON" --output appimage
+          mv ./*.AppImage Nebula-linux-x86_64.AppImage
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nebula-linux-x86_64
+          path: stellarium/Nebula-linux-x86_64.AppImage
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" stellarium/Nebula-linux-x86_64.AppImage \
+            --repo "$GITHUB_REPOSITORY" --title "Nebula $GITHUB_REF_NAME" \
+            --notes "Nebula is Stellarium plus the NebulaAI plugin, released under GPL-2.0-or-later. Linux AppImage: download, make it executable (chmod +x), run it, then open Settings in the Nebula AI window to add your API URL, key and model. Source: this repository plus Stellarium at https://github.com/Stellarium/stellarium/tree/${{ env.STELLARIUM_COMMIT }}"
