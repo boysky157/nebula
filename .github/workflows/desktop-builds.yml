@@ -1,0 +1,110 @@
+name: Windows and macOS
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  # Same Stellarium commit as the Linux workflow
+  STELLARIUM_COMMIT: 9dac07a412b1b8ce374c9218122fa5a85bbcbcf8
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            os: windows-2022
+            arch: win64_msvc2022_64
+          - name: macos
+            os: macos-14
+            arch: ""
+    steps:
+      - name: Keep line endings unchanged
+        run: git config --global core.autocrlf false
+
+      - name: Checkout Nebula
+        uses: actions/checkout@v4
+        with:
+          path: nebula
+
+      - name: Checkout Stellarium
+        uses: actions/checkout@v4
+        with:
+          repository: Stellarium/stellarium
+          ref: ${{ env.STELLARIUM_COMMIT }}
+          path: stellarium
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.3"
+          arch: ${{ matrix.arch }}
+          modules: "qtcharts qtmultimedia qtpositioning qtserialport qtspeech qtwebsockets qtshadertools"
+          cache: true
+
+      - name: Visual Studio environment (Windows)
+        if: matrix.name == 'windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Build tools
+        run: |
+          if [ "${{ matrix.name }}" = "windows" ]; then
+            choco install ninja -y
+          else
+            brew install ninja gettext
+          fi
+
+      - name: Add the Nebula plugin to Stellarium
+        working-directory: stellarium
+        run: |
+          git apply ../nebula/nebula-core.patch
+          cp -r ../nebula/NebulaAI plugins/
+
+      - name: Build
+        run: |
+          cmake -S stellarium -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PWD/install"
+          cmake --build build
+          cmake --install build
+
+      - name: Package (Windows)
+        if: matrix.name == 'windows'
+        run: |
+          EXE=$(find install -iname stellarium.exe | head -1)
+          windeployqt --release --compiler-runtime "$EXE"
+          7z a Nebula-windows-x64.zip ./install/*
+
+      - name: Package (macOS)
+        if: matrix.name == 'macos'
+        run: |
+          APP=$(find install build -maxdepth 3 -name 'Stellarium.app' | head -1)
+          macdeployqt "$APP"
+          ditto -c -k --keepParent "$APP" Nebula-macOS.zip
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nebula-${{ matrix.name }}
+          path: Nebula-*.zip
+
+      - name: Add to release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 60); do
+            gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 && break
+            sleep 60
+          done
+          gh release upload "$GITHUB_REF_NAME" Nebula-*.zip --repo "$GITHUB_REPOSITORY" --clobber
