@@ -1,0 +1,26 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index d19671e..3479d77 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -569,6 +569,7 @@ ENDMACRO()
+ 
+ #### demo plugins ####
+ ADD_PLUGIN(HelloStelModule 0)
++ADD_PLUGIN(NebulaAI 1)
+ ADD_PLUGIN(SimpleDrawLine 0)
+ #### work plugins ####
+ ADD_PLUGIN(AngleMeasure 1)
+diff --git a/src/core/StelApp.cpp b/src/core/StelApp.cpp
+index e460021..ef10b3c 100644
+--- a/src/core/StelApp.cpp
++++ b/src/core/StelApp.cpp
+@@ -112,6 +112,9 @@
+ #include "SpoutSender.hpp"
+ #endif
+ 
++#ifdef USE_STATIC_PLUGIN_NEBULAAI
++Q_IMPORT_PLUGIN(NebulaAIStelPluginInterface)
++#endif
+ #ifdef USE_STATIC_PLUGIN_HELLOSTELMODULE
+ Q_IMPORT_PLUGIN(HelloStelModuleStelPluginInterface)
+ #endif
