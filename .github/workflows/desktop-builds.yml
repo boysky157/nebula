@@ -82,6 +82,7 @@ jobs:
         if: matrix.name == 'windows'
         run: |
           EXE=$(find install -iname stellarium.exe | head -1)
+          cp stellarium/util/spout2/x64/SpoutLibrary.dll "$(dirname "$EXE")/"
           windeployqt --release --compiler-runtime "$EXE"
           7z a Nebula-windows-x64.zip ./install/*
 
