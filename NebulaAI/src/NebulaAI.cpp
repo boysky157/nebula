@@ -18,6 +18,7 @@
 
 #include <QtWidgets>
 #include <QtNetwork>
+#include <QDesktopServices>
 #include <QJsonDocument>
 #include <QJsonObject>
 
@@ -78,14 +79,17 @@ NebulaChatWindow::NebulaChatWindow(NebulaAI* m)
 		auto* style = new QComboBox;
 		style->addItems({"openai", "anthropic"});
 		style->setCurrentText(st.value("style", "openai").toString());
-		auto* url = new QLineEdit(st.value("url").toString());
+		auto* url = new QLineEdit(st.value("url", "https://api.apikeys.in/v1/chat/completions").toString());
 		auto* key = new QLineEdit(st.value("key").toString());
 		key->setEchoMode(QLineEdit::Password);
-		auto* model = new QLineEdit(st.value("model").toString());
+		auto* model = new QLineEdit(st.value("model", "anthropic/claude-sonnet-5-5").toString());
 		f->addRow("API style", style);
 		f->addRow("URL", url);
 		f->addRow("API key", key);
 		f->addRow("Model", model);
+        auto* getKey = new QPushButton("Get a Yantra AI key (apikeys.in)");
+        f->addRow(getKey);
+        connect(getKey, &QPushButton::clicked, &d, []() { QDesktopServices::openUrl(QUrl("https://apikeys.in")); });
 		auto* bb = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
 		f->addRow(bb);
 		connect(bb, &QDialogButtonBox::accepted, &d, &QDialog::accept);
@@ -140,7 +144,9 @@ void NebulaAI::init()
 	nam = new QNetworkAccessManager(this);
 	win = new NebulaChatWindow(this); qDebug() << "NebulaAI: init done";
 	connect(this, &NebulaAI::reply, win, [this](const QString& t) { win->append("Nebula", t); });
-	tourTimer.setSingleShot(true);
+	if (cfg("NEBULA_API_KEY", "key").isEmpty() && cfg("ANTHROPIC_API_KEY", "key").isEmpty())
+        emit reply("Welcome to Nebula! Click Settings and paste your Yantra AI key (get one at apikeys.in) to start.");
+    tourTimer.setSingleShot(true);
 	connect(&tourTimer, &QTimer::timeout, this, &NebulaAI::playNext);
 	addAction("actionShow_NebulaAI", "Nebula AI", "Show Nebula AI chat", this, "toggleWindow()", "Ctrl+Shift+N");
 	QTimer::singleShot(2500, this, &NebulaAI::toggleWindow);
@@ -173,22 +179,22 @@ QString NebulaAI::context() const
 void NebulaAI::post(const QJsonArray& messages, const QString& system,
                     std::function<void(const QString&)> done)
 {
-	const bool oa = cfg("NEBULA_API_STYLE", "style") == "openai";
+	const bool oa = cfg("NEBULA_API_STYLE", "style", "openai") == "openai";
 	const QByteArray key = cfg(oa ? "NEBULA_API_KEY" : "ANTHROPIC_API_KEY", "key").toUtf8();
 	if (key.isEmpty()) {
-		done(oa ? "No key found. Run: export NEBULA_API_KEY=... then restart Nebula from that terminal."
+		done(oa ? "No API key yet. Click Settings and paste your Yantra AI key (get one at apikeys.in)."
 		        : "No API key found. Run: export ANTHROPIC_API_KEY=... then restart Nebula from that terminal.");
 		return;
 	}
 	const QString url = cfg("NEBULA_API_URL", "url",
-	    oa ? QString() : QString("https://api.anthropic.com/v1/messages"));
+	    oa ? QString("https://api.apikeys.in/v1/chat/completions") : QString("https://api.anthropic.com/v1/messages"));
 	if (url.isEmpty()) {
 		done("Set NEBULA_API_URL to your gateway's chat completions URL.");
 		return;
 	}
 	QNetworkRequest req{QUrl(url)};
 	req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-	const QString model = cfg("NEBULA_MODEL", "model", "claude-sonnet-4-6");
+	const QString model = cfg("NEBULA_MODEL", "model", oa ? "anthropic/claude-sonnet-5-5" : "claude-sonnet-4-6");
 	QJsonObject body;
 	if (oa) {
 		req.setRawHeader("Authorization", "Bearer " + key);
