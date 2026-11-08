@@ -18,6 +18,9 @@
 
 #include <QtWidgets>
 #include <QtNetwork>
+#include <QtMultimedia>
+#include <QTextToSpeech>
+#include <QTemporaryFile>
 #include <QDesktopServices>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -64,11 +67,13 @@ NebulaChatWindow::NebulaChatWindow(NebulaAI* m)
 	auto* send = new QPushButton("Send");
 	auto* tour = new QPushButton("Tour");
 	auto* photo = new QPushButton("Photo");
+    auto* voiceBtn = new QPushButton("Voice");
 	auto* row = new QHBoxLayout;
 	row->addWidget(input, 1);
 	row->addWidget(send);
 	row->addWidget(tour);
-	row->addWidget(photo);
+	row->addWidget(voiceBtn);
+    row->addWidget(photo);
 	auto* cfgBtn = new QPushButton("Settings");
 	row->addWidget(cfgBtn);
 	connect(cfgBtn, &QPushButton::clicked, this, [this]() {
@@ -90,7 +95,16 @@ NebulaChatWindow::NebulaChatWindow(NebulaAI* m)
         auto* getKey = new QPushButton("Get a Yantra AI key (apikeys.in)");
         f->addRow(getKey);
         connect(getKey, &QPushButton::clicked, &d, []() { QDesktopServices::openUrl(QUrl("https://apikeys.in")); });
-		auto* bb = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
+		auto* speakBox = new QCheckBox("Speak replies aloud");
+        speakBox->setChecked(st.value("speak", true).toBool());
+        auto* ttsModel = new QLineEdit(st.value("tts_model", "tts-1-hd").toString());
+        auto* ttsVoice = new QLineEdit(st.value("tts_voice", "nova").toString());
+        auto* sttModel = new QLineEdit(st.value("stt_model", "whisper-1").toString());
+        f->addRow(speakBox);
+        f->addRow("Voice model", ttsModel);
+        f->addRow("Voice", ttsVoice);
+        f->addRow("Speech-to-text model", sttModel);
+        auto* bb = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
 		f->addRow(bb);
 		connect(bb, &QDialogButtonBox::accepted, &d, &QDialog::accept);
 		connect(bb, &QDialogButtonBox::rejected, &d, &QDialog::reject);
@@ -99,6 +113,10 @@ NebulaChatWindow::NebulaChatWindow(NebulaAI* m)
 			st.setValue("url", url->text().trimmed());
 			st.setValue("key", key->text().trimmed());
 			st.setValue("model", model->text().trimmed());
+            st.setValue("speak", speakBox->isChecked());
+            st.setValue("tts_model", ttsModel->text().trimmed());
+            st.setValue("tts_voice", ttsVoice->text().trimmed());
+            st.setValue("stt_model", sttModel->text().trimmed());
 			append("Nebula", "Settings saved.");
 		}
 	});
@@ -114,6 +132,7 @@ NebulaChatWindow::NebulaChatWindow(NebulaAI* m)
 	connect(send, &QPushButton::clicked, this, submit);
 	connect(input, &QLineEdit::returnPressed, this, submit);
 	connect(tour, &QPushButton::clicked, m, &NebulaAI::startTour);
+    connect(voiceBtn, &QPushButton::clicked, m, &NebulaAI::toggleVoice);
 	connect(photo, &QPushButton::clicked, this, [this, m]() {
 		const QString f = QFileDialog::getOpenFileName(this, "Choose a sky photo", QString(),
 		                                               "Images (*.jpg *.jpeg *.png *.webp *.gif)");
@@ -146,6 +165,12 @@ void NebulaAI::init()
 	connect(this, &NebulaAI::reply, win, [this](const QString& t) { win->append("Nebula", t); });
 	if (cfg("NEBULA_API_KEY", "key").isEmpty() && cfg("ANTHROPIC_API_KEY", "key").isEmpty())
         emit reply("Welcome to Nebula! Click Settings and paste your Yantra AI key (get one at apikeys.in) to start.");
+    voice = new NebulaVoice(this);
+    connect(voice, &NebulaVoice::transcribed, this, [this](const QString& t) {
+        emit reply("You said: " + t);
+        ask(t);
+    });
+    connect(voice, &NebulaVoice::status, this, [this](const QString& s) { emit reply(s); });
     tourTimer.setSingleShot(true);
 	connect(&tourTimer, &QTimer::timeout, this, &NebulaAI::playNext);
 	addAction("actionShow_NebulaAI", "Nebula AI", "Show Nebula AI chat", this, "toggleWindow()", "Ctrl+Shift+N");
@@ -302,6 +327,7 @@ void NebulaAI::ask(const QString& text)
 		const QString say = o.contains("say") ? o["say"].toString() : out;
 		history.append(QJsonObject{{"role", "assistant"}, {"content", out}});
 		emit reply(say);
+        speak(say);
 		runActions(o["actions"].toArray());
 	});
 }
@@ -325,6 +351,21 @@ void NebulaAI::identifyPhoto(const QString& path)
 	QJsonArray msgs{QJsonObject{{"role", "user"}, {"content", QJsonArray{img, txt}}}};
 	post(msgs, "You are an expert astronomer helping identify what appears in a sky photo.",
 	     [this](const QString& out) { emit reply(out); });
+}
+
+void NebulaAI::toggleVoice()
+{
+    if (!voice) return;
+    if (voice->recording())
+        voice->stopRecording();
+    else
+        voice->startRecording();
+}
+
+void NebulaAI::speak(const QString& text)
+{
+    if (voice && QSettings("Nebula", "NebulaAI").value("speak", true).toBool())
+        voice->speak(text);
 }
 
 void NebulaAI::startTour()
@@ -352,5 +393,179 @@ void NebulaAI::playNext()
 	const QJsonObject s = tourStops[tourIdx++].toObject();
 	gotoObject(s["name"].toString());
 	emit reply(s["name"].toString() + ": " + s["narration"].toString());
+    speak(s["narration"].toString());
 	tourTimer.start(10000);
+}
+
+// ---------------------------------------------------------------- voice
+static QString voiceBase()
+{
+    const QString u = cfg("NEBULA_API_URL", "url", "https://api.apikeys.in/v1/chat/completions");
+    const int i = u.indexOf("/chat/completions");
+    return i > 0 ? u.left(i) : u;
+}
+
+NebulaVoice::NebulaVoice(QObject* parent) : QObject(parent)
+{
+    net = new QNetworkAccessManager(this);
+}
+
+void NebulaVoice::startRecording()
+{
+#ifdef Q_OS_MACOS
+    emit status("Voice input is not available on macOS yet.");
+    return;
+#endif
+    if (rec) return;
+    if (player) player->stop();
+    if (tts) tts->stop();
+    const QAudioDevice dev = QMediaDevices::defaultAudioInput();
+    if (dev.isNull()) {
+        emit status("No microphone found.");
+        return;
+    }
+    QAudioFormat fmt = dev.preferredFormat();
+    fmt.setSampleFormat(QAudioFormat::Int16);
+    if (!dev.isFormatSupported(fmt)) {
+        emit status("This microphone format is not supported.");
+        return;
+    }
+    rate = fmt.sampleRate();
+    channels = fmt.channelCount();
+    delete src;
+    delete buf;
+    buf = new QBuffer(this);
+    buf->open(QIODevice::ReadWrite);
+    src = new QAudioSource(dev, fmt, this);
+    src->start(buf);
+    rec = true;
+    emit status("Listening... click Voice again when you are done.");
+}
+
+void NebulaVoice::stopRecording()
+{
+    if (!rec) return;
+    rec = false;
+    src->stop();
+    const QByteArray pcm = buf->data();
+    if (pcm.size() < rate * channels / 2) {
+        emit status("That was too short, please try again.");
+        return;
+    }
+    const QString key = cfg("NEBULA_API_KEY", "key");
+    if (key.isEmpty()) {
+        emit status("Add your API key in Settings first.");
+        return;
+    }
+    auto le32 = [](quint32 v) {
+        QByteArray b;
+        for (int i = 0; i < 4; ++i) b.append(char((v >> (8 * i)) & 0xFF));
+        return b;
+    };
+    auto le16 = [](quint16 v) {
+        QByteArray b;
+        b.append(char(v & 0xFF));
+        b.append(char((v >> 8) & 0xFF));
+        return b;
+    };
+    QByteArray wav;
+    wav += "RIFF";
+    wav += le32(36 + pcm.size());
+    wav += "WAVEfmt ";
+    wav += le32(16);
+    wav += le16(1);
+    wav += le16(channels);
+    wav += le32(rate);
+    wav += le32(rate * channels * 2);
+    wav += le16(channels * 2);
+    wav += le16(16);
+    wav += "data";
+    wav += le32(pcm.size());
+    wav += pcm;
+
+    emit status("Transcribing...");
+    auto* mp = new QHttpMultiPart(QHttpMultiPart::FormDataType);
+    QHttpPart model;
+    model.setHeader(QNetworkRequest::ContentDispositionHeader, "form-data; name=\"model\"");
+    model.setBody(cfg("NEBULA_STT_MODEL", "stt_model", "whisper-1").toUtf8());
+    QHttpPart file;
+    file.setHeader(QNetworkRequest::ContentTypeHeader, "audio/wav");
+    file.setHeader(QNetworkRequest::ContentDispositionHeader, "form-data; name=\"file\"; filename=\"speech.wav\"");
+    file.setBody(wav);
+    mp->append(model);
+    mp->append(file);
+    QNetworkRequest req{QUrl(voiceBase() + "/audio/transcriptions")};
+    req.setRawHeader("Authorization", "Bearer " + key.toUtf8());
+    QNetworkReply* r = net->post(req, mp);
+    mp->setParent(r);
+    connect(r, &QNetworkReply::finished, this, [this, r]() {
+        const QByteArray body = r->readAll();
+        const QString err = r->errorString();
+        const bool failed = r->error() != QNetworkReply::NoError;
+        r->deleteLater();
+        const QJsonObject o = QJsonDocument::fromJson(body).object();
+        if (o.contains("error")) {
+            const QJsonValue e = o["error"];
+            emit status("Speech-to-text error: " + (e.isObject() ? e.toObject()["message"].toString() : e.toString()));
+            return;
+        }
+        if (failed && o.isEmpty()) {
+            emit status("Speech-to-text failed: " + err);
+            return;
+        }
+        const QString t = o["text"].toString().trimmed();
+        if (t.isEmpty()) {
+            emit status("I did not catch that, please try again.");
+            return;
+        }
+        emit transcribed(t);
+    });
+}
+
+void NebulaVoice::speak(const QString& text)
+{
+    if (text.trimmed().isEmpty()) return;
+    auto fallback = [this, text]() {
+        if (!tts) tts = new QTextToSpeech(this);
+        tts->say(text);
+    };
+    const QString key = cfg("NEBULA_API_KEY", "key");
+    if (key.isEmpty()) {
+        fallback();
+        return;
+    }
+    QNetworkRequest req{QUrl(voiceBase() + "/audio/speech")};
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    req.setRawHeader("Authorization", "Bearer " + key.toUtf8());
+    const QJsonObject body{{"model", cfg("NEBULA_TTS_MODEL", "tts_model", "tts-1-hd")},
+                           {"input", text.left(3500)},
+                           {"voice", cfg("NEBULA_TTS_VOICE", "tts_voice", "nova")},
+                           {"response_format", "mp3"}};
+    QNetworkReply* r = net->post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
+    connect(r, &QNetworkReply::finished, this, [this, r, fallback]() {
+        const QByteArray audio = r->readAll();
+        const bool ok = r->error() == QNetworkReply::NoError && audio.size() > 1000;
+        const QString err = r->errorString();
+        r->deleteLater();
+        if (!ok) {
+            emit status("Cloud voice unavailable (" + err + "), using the system voice.");
+            fallback();
+            return;
+        }
+        delete clip;
+        clip = new QTemporaryFile(QDir::tempPath() + "/nebula-voice-XXXXXX.mp3", this);
+        if (!clip->open()) {
+            fallback();
+            return;
+        }
+        clip->write(audio);
+        clip->flush();
+        if (!player) {
+            player = new QMediaPlayer(this);
+            player->setAudioOutput(new QAudioOutput(this));
+        }
+        player->stop();
+        player->setSource(QUrl::fromLocalFile(clip->fileName()));
+        player->play();
+    });
 }

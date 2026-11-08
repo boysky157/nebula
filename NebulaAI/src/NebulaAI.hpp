@@ -17,6 +17,12 @@ class QNetworkAccessManager;
 class QTextEdit;
 class QLineEdit;
 class NebulaChatWindow;
+class NebulaVoice;
+class QAudioSource;
+class QBuffer;
+class QMediaPlayer;
+class QTextToSpeech;
+class QTemporaryFile;
 
 class NebulaAI : public StelModule
 {
@@ -35,6 +41,7 @@ public slots:
 	void ask(const QString& text);
 	void identifyPhoto(const QString& path);
 	void startTour();
+    void toggleVoice();
 
 signals:
 	void reply(const QString& text);
@@ -46,8 +53,10 @@ private:
 	void runActions(const QJsonArray& actions);
 	bool gotoObject(const QString& name);
 	void playNext();
+    void speak(const QString& text);
 
 	QNetworkAccessManager* nam = nullptr;
+    NebulaVoice* voice = nullptr;
 	NebulaChatWindow* win = nullptr;
 	QJsonArray history;
 	QJsonArray tourStops;
@@ -65,6 +74,32 @@ public:
 private:
 	QTextEdit* log;
 	QLineEdit* input;
+};
+
+class NebulaVoice : public QObject
+{
+    Q_OBJECT
+public:
+    explicit NebulaVoice(QObject* parent = nullptr);
+    bool recording() const { return rec; }
+    void startRecording();
+    void stopRecording();
+    void speak(const QString& text);
+
+signals:
+    void transcribed(const QString& text);
+    void status(const QString& text);
+
+private:
+    QNetworkAccessManager* net = nullptr;
+    QAudioSource* src = nullptr;
+    QBuffer* buf = nullptr;
+    QMediaPlayer* player = nullptr;
+    QTextToSpeech* tts = nullptr;
+    QTemporaryFile* clip = nullptr;
+    bool rec = false;
+    int rate = 16000;
+    int channels = 1;
 };
 
 //! Qt plug-in interface for NebulaAI
