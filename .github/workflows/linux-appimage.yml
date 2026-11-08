@@ -43,6 +43,7 @@ jobs:
         run: |
           git apply ../nebula/nebula-core.patch
           cp -r ../nebula/NebulaAI plugins/
+          python3 ../nebula/enable-nebula.py
 
       - name: Build
         working-directory: stellarium
