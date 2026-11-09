@@ -87,7 +87,7 @@ NebulaChatWindow::NebulaChatWindow(NebulaAI* m)
 		auto* url = new QLineEdit(st.value("url", "https://api.apikeys.in/v1/chat/completions").toString());
 		auto* key = new QLineEdit(st.value("key").toString());
 		key->setEchoMode(QLineEdit::Password);
-		auto* model = new QLineEdit(st.value("model", "anthropic/claude-sonnet-5-5").toString());
+		auto* model = new QLineEdit(st.value("model", "anthropic/claude-haiku-5-5").toString());
 		f->addRow("API style", style);
 		f->addRow("URL", url);
 		f->addRow("API key", key);
@@ -97,9 +97,9 @@ NebulaChatWindow::NebulaChatWindow(NebulaAI* m)
         connect(getKey, &QPushButton::clicked, &d, []() { QDesktopServices::openUrl(QUrl("https://apikeys.in")); });
 		auto* speakBox = new QCheckBox("Speak replies aloud");
         speakBox->setChecked(st.value("speak", true).toBool());
-        auto* ttsModel = new QLineEdit(st.value("tts_model", "tts-1-hd").toString());
-        auto* ttsVoice = new QLineEdit(st.value("tts_voice", "nova").toString());
-        auto* sttModel = new QLineEdit(st.value("stt_model", "whisper-1").toString());
+        auto* ttsModel = new QLineEdit(st.value("tts_model", "xai/grok-tts").toString());
+        auto* ttsVoice = new QLineEdit(st.value("tts_voice", "Eve").toString());
+        auto* sttModel = new QLineEdit(st.value("stt_model", "xai/grok-stt").toString());
         f->addRow(speakBox);
         f->addRow("Voice model", ttsModel);
         f->addRow("Voice", ttsVoice);
@@ -219,7 +219,7 @@ void NebulaAI::post(const QJsonArray& messages, const QString& system,
 	}
 	QNetworkRequest req{QUrl(url)};
 	req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-	const QString model = cfg("NEBULA_MODEL", "model", oa ? "anthropic/claude-sonnet-5-5" : "claude-sonnet-4-6");
+	const QString model = cfg("NEBULA_MODEL", "model", oa ? "anthropic/claude-haiku-5-5" : "claude-sonnet-4-6");
 	QJsonObject body;
 	if (oa) {
 		req.setRawHeader("Authorization", "Bearer " + key);
@@ -487,7 +487,7 @@ void NebulaVoice::stopRecording()
     auto* mp = new QHttpMultiPart(QHttpMultiPart::FormDataType);
     QHttpPart model;
     model.setHeader(QNetworkRequest::ContentDispositionHeader, "form-data; name=\"model\"");
-    model.setBody(cfg("NEBULA_STT_MODEL", "stt_model", "whisper-1").toUtf8());
+    model.setBody(cfg("NEBULA_STT_MODEL", "stt_model", "xai/grok-stt").toUtf8());
     QHttpPart file;
     file.setHeader(QNetworkRequest::ContentTypeHeader, "audio/wav");
     file.setHeader(QNetworkRequest::ContentDispositionHeader, "form-data; name=\"file\"; filename=\"speech.wav\"");
@@ -537,9 +537,9 @@ void NebulaVoice::speak(const QString& text)
     QNetworkRequest req{QUrl(voiceBase() + "/audio/speech")};
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     req.setRawHeader("Authorization", "Bearer " + key.toUtf8());
-    const QJsonObject body{{"model", cfg("NEBULA_TTS_MODEL", "tts_model", "tts-1-hd")},
+    const QJsonObject body{{"model", cfg("NEBULA_TTS_MODEL", "tts_model", "xai/grok-tts")},
                            {"input", text.left(3500)},
-                           {"voice", cfg("NEBULA_TTS_VOICE", "tts_voice", "nova")},
+                           {"voice", cfg("NEBULA_TTS_VOICE", "tts_voice", "Eve")},
                            {"response_format", "mp3"}};
     QNetworkReply* r = net->post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
     connect(r, &QNetworkReply::finished, this, [this, r, fallback]() {
