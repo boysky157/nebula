@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Nebula – talk to the night sky</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Nebula is a free, open-source AI planetarium built on Stellarium. Ask the sky in plain words, take guided tours and identify sky photos.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Nebula – talk to the night sky">
+<meta property="og:description" content="A free, open-source AI planetarium. Say “show me Saturn” and the sky moves. Downloads for Windows and Linux.">
+<style>
+:root{color-scheme:dark;--bg:#05070f;--fg:#e8ecf8;--mut:#9aa3bf;--ac:#7aa2ff;--card:#0f1530cc;--line:#26305a}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:radial-gradient(ellipse at 50% -10%,#16205a 0,var(--bg) 55%) fixed;color:var(--fg);font:16px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif}
+#stars{position:fixed;inset:0;width:100%;height:100%;z-index:-1}
+a{color:var(--ac)}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--ac);outline-offset:3px}
+nav{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;max-width:980px;margin:0 auto;padding:16px 20px}
+nav b{letter-spacing:.22em;color:var(--ac);margin-right:auto}
+nav a{color:var(--mut);text-decoration:none;font-size:14px}
+nav a:hover{color:var(--fg)}
+main{max-width:980px;margin:0 auto;padding:0 20px 40px}
+header{text-align:center;padding:54px 0 30px}
+.badge{display:inline-block;font-size:12px;border:1px solid var(--line);border-radius:99px;padding:3px 12px;color:var(--mut);margin-bottom:16px}
+h1{font-size:clamp(44px,10vw,84px);letter-spacing:.2em;margin:0;color:var(--ac);line-height:1.1}
+.tag{font-size:clamp(18px,3.4vw,24px);margin:14px auto 8px;max-width:640px}
+.sub{color:var(--mut);max-width:620px;margin:0 auto 28px}
+.btn{display:inline-block;padding:12px 24px;border-radius:12px;border:1px solid var(--line);background:#10162a;color:var(--fg);text-decoration:none;margin:5px;font-weight:600}
+.btn.p{background:#2a3d80;border-color:#3d55a8}
+.btn:hover{border-color:var(--ac)}
+section{margin-top:64px}
+h2{font-size:28px;margin:0 0 8px}
+.lead{color:var(--mut);margin:0 0 22px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;backdrop-filter:blur(4px)}
+.card b{display:block;margin-bottom:4px;font-size:17px}
+.card span,.card p{color:var(--mut);margin:0}
+.card.dl .btn{display:block;text-align:center;margin:12px 0 6px}
+.card small{color:var(--mut);display:block}
+.soon{opacity:.6}
+.steps{counter-reset:s}
+.step{counter-increment:s}
+.step::before{content:counter(s);display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#2a3d80;margin-bottom:10px;font-weight:700}
+video{width:100%;border-radius:14px;border:1px solid var(--line);background:#000}
+pre{background:#0b1022;border:1px solid var(--line);border-radius:12px;padding:14px;overflow-x:auto;font-size:13px}
+details{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-bottom:10px}
+summary{cursor:pointer;font-weight:600}
+details p{color:var(--mut);margin:10px 0 0}
+footer{border-top:1px solid var(--line);margin-top:70px;padding:24px 0;font-size:14px;color:var(--mut);text-align:center}
+[hidden]{display:none!important}
+</style></head><body>
+<canvas id="stars" aria-hidden="true"></canvas>
+<nav><b>NEBULA</b><a href="#download">Download</a><a href="#features">Features</a><a href="#how">How it works</a><a href="#faq">FAQ</a><a href="https://github.com/boysky157/nebula">GitHub</a></nav>
+<main>
+<header>
+<div class="badge">Early alpha · free &amp; open source</div>
+<h1>NEBULA</h1>
+<p class="tag">Talk to the night sky.</p>
+<p class="sub">An AI planetarium built on Stellarium. Say “show me Saturn”, take a guided tour, or upload a photo and find out what’s in it.</p>
+<a class="btn p" href="#download">Download Nebula</a>
+<a class="btn" id="demoBtn" href="demo.html" hidden>Try the web demo</a>
+</header>
+
+<section id="demo" hidden>
+<h2>See it in action</h2>
+<p class="lead">Ask in plain words. Nebula moves the sky for you.</p>
+<video controls muted playsinline preload="metadata" src="nebula.mp4"></video>
+</section>
+
+<section id="download">
+<h2>Download</h2>
+<p class="lead">Pick your system. Each download is about 500 MB, because it includes the full Stellarium sky data.</p>
+<div class="grid">
+<div class="card dl"><b>Windows</b><span>Windows 10 and 11, 64-bit</span>
+<a class="btn p" href="https://github.com/boysky157/nebula/releases/latest/download/Nebula-windows-x64.zip">Download for Windows</a>
+<small>Extract the ZIP, then open stellarium.exe. If Windows shows “protected your PC”, choose More info → Run anyway. The app isn’t code-signed yet.</small></div>
+<div class="card dl"><b>Linux</b><span>64-bit AppImage</span>
+<a class="btn p" href="https://github.com/boysky157/nebula/releases/latest/download/Nebula-linux-x86_64.AppImage">Download for Linux</a>
+<small>Run <code>chmod +x Nebula-linux-x86_64.AppImage</code>, then start it.</small></div>
+<div class="card dl soon"><b>macOS</b><span>Coming soon</span><small>The Mac build is still being fixed.</small></div>
+</div>
+<p class="lead" style="margin-top:14px">All versions: <a href="https://github.com/boysky157/nebula/releases">GitHub Releases</a>.</p>
+</section>
+
+<section id="features">
+<h2>What you can do</h2>
+<p class="lead">Everything in Stellarium, plus an assistant that drives it.</p>
+<div class="grid">
+<div class="card"><b>Ask the sky</b><p>“Show me Vega.” “What does the sky look like at 9 pm?” The view, time and zoom change for you.</p></div>
+<div class="card"><b>Guided tours</b><p>One click plans a five-stop tour of what is up right now, with narration.</p></div>
+<div class="card"><b>Photo identification</b><p>Upload a sky photo and get the stars, planets and constellations named.</p></div>
+<div class="card"><b>Explain anything</b><p>Ask what an object is, how far away it is, and why it matters.</p></div>
+<div class="card"><b>Voice mode</b><p>Speak your question and hear the answer. In testing, coming soon.</p></div>
+<div class="card"><b>Real Stellarium</b><p>Catalogs of millions of stars and deep-sky objects, rendered in real time.</p></div>
+</div>
+</section>
+
+<section id="how">
+<h2>How it works</h2>
+<div class="grid steps">
+<div class="card step"><b>Download and open</b><p>Install Nebula for your system and start it. The Nebula AI chat window opens on its own.</p></div>
+<div class="card step"><b>Paste your key</b><p>Click Settings and paste a Yantra AI key (<a href="https://apikeys.in">get one at apikeys.in</a>). It stays on your computer.</p></div>
+<div class="card step"><b>Ask the sky</b><p>Type “show me Saturn” or press Tour. The sky answers.</p></div>
+</div>
+</section>
+
+<section id="build">
+<h2>Build it yourself</h2>
+<p class="lead">Nebula is a plugin plus a small patch for <a href="https://stellarium.org">Stellarium</a>. On Linux or WSL:</p>
+<pre>git clone --depth 1 https://github.com/Stellarium/stellarium.git nebula
+git clone https://github.com/boysky157/nebula.git nebula-plugin
+cd nebula
+git apply ../nebula-plugin/nebula-core.patch
+cp -r ../nebula-plugin/NebulaAI plugins/
+mkdir -p builds/unix &amp;&amp; cd builds/unix
+cmake ../.. &amp;&amp; make -j4
+./src/stellarium</pre>
+</section>
+
+<section id="faq">
+<h2>Questions</h2>
+<details><summary>Is Nebula free?</summary><p>Yes. The app is free and open source under the GNU GPL v2 or later. The AI features use a Yantra AI key, which runs on prepaid credits.</p></details>
+<details><summary>Where does my key go?</summary><p>It is saved on your own computer and sent only to the AI service address you set in Settings (Yantra AI by default).</p></details>
+<details><summary>What data is sent to the AI?</summary><p>Your questions, the current sky time and place, and any photo you choose to upload. Nothing is sent until you ask.</p></details>
+<details><summary>Can I use another AI provider?</summary><p>Yes. In Settings you can switch to any OpenAI-compatible service, or to Anthropic.</p></details>
+<details><summary>Is Nebula made by the Stellarium team?</summary><p>No. Nebula is an independent project built on top of their open-source work, and is not affiliated with or endorsed by them. Their engine is what makes it possible.</p></details>
+</section>
+
+<footer>
+Nebula is released under the GNU GPL v2 or later · Built on <a href="https://stellarium.org">Stellarium</a> · AI by <a href="https://apikeys.in">Yantra AI</a> · <a href="https://github.com/boysky157/nebula">Source on GitHub</a>
+</footer>
+</main>
+<script>
+(function(){
+var c=document.getElementById("stars"),x=c.getContext("2d"),s=[],still=matchMedia("(prefers-reduced-motion: reduce)").matches;
+function size(){c.width=innerWidth;c.height=innerHeight;s=[];for(var i=0;i<140;i++)s.push({x:Math.random()*c.width,y:Math.random()*c.height,r:Math.random()*1.3+.2,p:Math.random()*6})}
+function draw(t){x.clearRect(0,0,c.width,c.height);for(var i=0;i<s.length;i++){var q=s[i],a=.35+.4*Math.sin(t/1400+q.p);x.globalAlpha=still?.6:a;x.fillStyle="#fff";x.beginPath();x.arc(q.x,q.y,q.r,0,7);x.fill()}if(!still)requestAnimationFrame(draw)}
+addEventListener("resize",function(){size();if(still)draw(0)});size();requestAnimationFrame(draw);
+function show(url,id){fetch(url,{method:"HEAD"}).then(function(r){if(r.ok)document.getElementById(id).hidden=false}).catch(function(){})}
+show("nebula.mp4","demo");show("demo.html","demoBtn");
+})();
+</script>
+</body></html>
